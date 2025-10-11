@@ -42,8 +42,8 @@ function Find-Rscript {
     # 3. Check Windows Registry
     Write-Verbose "Checking Windows Registry..."
     $registryPaths = @(
-        "HKLM:\SOFTWARE\R-core\R\$Version",
-        "HKCU:\SOFTWARE\R-core\R\$Version"
+        "HKLM:\\SOFTWARE\\R-core\\R\$Version",
+        "HKCU:\\SOFTWARE\\R-core\\R\$Version"
     )
     
     foreach ($regPath in $registryPaths) {
@@ -63,10 +63,10 @@ function Find-Rscript {
     # 4. Check common installation directories
     Write-Verbose "Checking common installation locations..."
     $commonPaths = @(
-        "C:\Program Files\R\R-$Version",
-        "$env:ProgramFiles\R\R-$Version",
-        "$env:LOCALAPPDATA\Programs\R\R-$Version",
-        "C:\R\R-$Version"
+        "C:\\Program Files\\R\\R-$Version",
+        "$env:ProgramFiles\\R\\R-$Version",
+        "$env:LOCALAPPDATA\\Programs\\R\\R-$Version",
+        "C:\\R\\R-$Version"
     )
     
     foreach ($path in $commonPaths) {
@@ -80,8 +80,8 @@ function Find-Rscript {
     $drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Root -match '^[A-Z]:\\$' }
     foreach ($drive in $drives) {
         $possiblePaths = @(
-            "$($drive.Root)Program Files\R\R-$Version",
-            "$($drive.Root)R\R-$Version"
+            "$($drive.Root)Program Files\\R\\R-$Version",
+            "$($drive.Root)R\\R-$Version"
         )
         foreach ($path in $possiblePaths) {
             if (Test-Path $path) {
@@ -176,6 +176,67 @@ function Invoke-RCode {
         
     } catch {
         Write-Error "Failed to execute R code: $($_.Exception.Message)"
+        throw
+    }
+}
+
+function FindRVersionFromRenv {
+    <#
+    .SYNOPSIS
+        Finds the R version from a renv.lock file.
+    
+    .DESCRIPTION
+        Searches for a renv.lock file in the parent directory, parses it, 
+        and returns the R version. Throws an error if the file is not found.
+    
+    .EXAMPLE
+        FindRVersionFromRenv
+    #>
+    [CmdletBinding()]
+    param()
+
+    $renvLockPath = Join-Path (Get-Location) "renv.lock"
+
+    if (-not (Test-Path $renvLockPath)) {
+        throw "renv.lock not found at $renvLockPath"
+    }
+
+    try {
+        $renvLockContent = Get-Content $renvLockPath -Raw | ConvertFrom-Json
+        $rVersion = $renvLockContent.R.Version
+        return $rVersion
+    }
+    catch {
+        throw "Failed to parse renv.lock or find R version: $($_.Exception.Message)"
+    }
+}
+
+function Invoke-RCode-Renv {
+    <#
+    .SYNOPSIS
+        Executes R code using the R version specified in renv.lock.
+    
+    .DESCRIPTION
+        Finds the R version from renv.lock and executes the provided R code.
+    
+    .PARAMETER Code
+        The R code to execute.
+    
+    .EXAMPLE
+        Invoke-RCode-Renv -Code "print('Hello from R')"
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Code
+    )
+
+    try {
+        $rVersion = FindRVersionFromRenv
+        Invoke-RCode -Version $rVersion -Code $Code
+    }
+    catch {
+        Write-Error "Failed to execute R code using renv version: $($_.Exception.Message)"
         throw
     }
 }

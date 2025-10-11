@@ -1,0 +1,95 @@
+---
+title: "Creating and Running R Commands with PowerShell"
+format: html
+theme: litera
+---
+
+This guide explains how to create self-contained PowerShell scripts to execute R code, which is particularly useful for managing tasks within the Positron IDE.
+
+## Core Concept: Command Scripts
+
+The primary workflow is to create individual PowerShell (`.ps1`) scripts inside the `commands` folder. Each script represents a single, executable command that runs a specific piece of R code.
+
+This approach is cleaner than typing long commands interactively and makes your tasks reusable and easy to run.
+
+::: {.callout-note}
+## Project Structure
+
+This guide assumes your project is set up with the following structure, where your command scripts live in the `commands` directory.
+
+```text
+/your-project-root
+├── commands/
+│   ├── Invoke-Rscript.ps1
+│   └── your_command.ps1
+├── renv.lock
+└── ... (your other project files)
+```
+:::
+
+## Creating a New Command
+
+Creating a new command involves just two steps:
+
+#### 1. Create a New `.ps1` File
+
+Create a new file with a `.ps1` extension inside the `commands` directory. For example, let's create `commands/run_analysis.ps1`.
+
+#### 2. Add the Script Content
+
+Open your new file and add the following content as a template. This example uses the R version specified in your `renv.lock` file.
+
+```powershell
+# Step 1: Load the helper functions
+# The path is relative to the project root
+. .\commands\Invoke-Rscript.ps1
+
+# Step 2: Define and execute your R code
+Invoke-RCode-Renv -Code @'
+# --- Your R Code Goes Here ---
+
+# Example: Create a data frame and print a summary
+df <- data.frame(
+    name  = c("Alice", "Bob", "Charlie"),
+    age   = c(25, 30, 35),
+    score = c(85, 90, 95)
+)
+
+cat("Data Summary:\n")
+print(summary(df))
+
+'@
+```
+
+::: {.callout-tip}
+### Need a Specific R Version?
+
+If your project doesn't use `renv` or you need to override the version, use the `Invoke-RCode` function instead.
+
+```powershell
+# Use a specific R version
+Invoke-RCode -Version "4.5.0" -Code "print('Hello from R 4.5.0!')"
+```
+:::
+
+## Running Your Command
+
+To run your command, simply execute the script from the PowerShell terminal **from the project root directory**.
+
+```powershell
+.\commands\run_analysis.ps1
+```
+
+## Handling Long-Running Scripts
+
+For scripts that take a long time to run, the best approach is to dedicate a separate PowerShell terminal to them. This keeps your main terminal and R console in Positron free for other work.
+
+1.  **Open a new PowerShell terminal** in Positron.
+2.  **Run your command script** in the new terminal.
+
+```powershell
+# In your new terminal, from the project root:
+.\commands\long_running_task.ps1
+```
+
+The script will run to completion in that terminal, and you can continue your work elsewhere.

@@ -1,93 +1,106 @@
-# Using PowerShell to Run Background R Jobs in Positron
+# Creating and Running R Commands with PowerShell
 
-This guide explains how to use the provided PowerShell functions to execute R scripts as background jobs from a PowerShell terminal, which is particularly useful when working within the Positron IDE.
 
-## Loading the Functions
+This guide explains how to create self-contained PowerShell scripts to
+execute R code, which is particularly useful for managing tasks within
+the Positron IDE.
 
-Before you can use the functions, you need to load them into your PowerShell session. This is done by "dot-sourcing" the `Invoke-Rscript.ps1` file. From your PowerShell terminal, navigate to the root of this project and run the following command:
+## Core Concept: Command Scripts
 
-```powershell
+The primary workflow is to create individual PowerShell (`.ps1`) scripts
+inside the `commands` folder. Each script represents a single,
+executable command that runs a specific piece of R code.
+
+This approach is cleaner than typing long commands interactively and
+makes your tasks reusable and easy to run.
+
+> [!NOTE]
+>
+> ### Project Structure
+>
+> This guide assumes your project is set up with the following
+> structure, where your command scripts live in the `commands`
+> directory.
+>
+> ``` text
+> /your-project-root
+> ├── commands/
+> │   ├── Invoke-Rscript.ps1
+> │   └── your_command.ps1
+> ├── renv.lock
+> └── ... (your other project files)
+> ```
+
+## Creating a New Command
+
+Creating a new command involves just two steps:
+
+#### 1. Create a New `.ps1` File
+
+Create a new file with a `.ps1` extension inside the `commands`
+directory. For example, let’s create `commands/run_analysis.ps1`.
+
+#### 2. Add the Script Content
+
+Open your new file and add the following content as a template. This
+example uses the R version specified in your `renv.lock` file.
+
+``` powershell
+# Step 1: Load the helper functions
+# The path is relative to the project root
 . .\commands\Invoke-Rscript.ps1
-```
 
-This command loads the `Invoke-RCode` and `Invoke-RCode-Renv` functions, making them available in your current terminal session.
+# Step 2: Define and execute your R code
+Invoke-RCode-Renv -Code @'
+# --- Your R Code Goes Here ---
 
-## Executing R Code
-
-There are two main functions you can use to execute R code:
-
-### 1. `Invoke-RCode`: Specify the R Version Manually
-
-This function allows you to execute R code with a specific version of R that you define.
-
-**Example:**
-
-```powershell
-Invoke-RCode -Version "4.5.0" -Code "print('Hello from R!')"
-```
-
-You can also run multi-line scripts:
-
-```powershell
-Invoke-RCode -Version "4.5.0" -Code @'
-# Create a data frame
+# Example: Create a data frame and print a summary
 df <- data.frame(
     name  = c("Alice", "Bob", "Charlie"),
     age   = c(25, 30, 35),
     score = c(85, 90, 95)
 )
 
-# Calculate and display statistics
 cat("Data Summary:\n")
-cat("Average age:", mean(df$age), "\n")
-cat("Average score:", mean(df$score), "\n")
-cat("Total rows:", nrow(df), "\n")
+print(summary(df))
+
 '@
 ```
 
-### 2. `Invoke-RCode-Renv`: Use the R Version from `renv.lock`
+> [!TIP]
+>
+> ### Need a Specific R Version?
+>
+> If your project doesn’t use `renv` or you need to override the
+> version, use the `Invoke-RCode` function instead.
+>
+> ``` powershell
+> # Use a specific R version
+> Invoke-RCode -Version "4.5.0" -Code "print('Hello from R 4.5.0!')"
+> ```
 
-This function is useful when you are working in a project that uses `renv` for package management. It automatically finds the `renv.lock` file in your project, reads the R version specified within it, and executes your R code using that version.
+## Running Your Command
 
-**Example:**
+To run your command, simply execute the script from the PowerShell
+terminal **from the project root directory**.
 
-```powershell
-Invoke-RCode-Renv -Code @'
-print("Hello from R, using the version specified in renv.lock!")
-print(R.version.string)
-'@
+``` powershell
+.\commands\run_analysis.ps1
 ```
 
-## Running R Scripts as Background Jobs
+## Handling Long-Running Scripts
 
-The real power of using these functions in a PowerShell terminal within Positron is the ability to run long-running R scripts as background jobs. This frees up the R console in Positron for other tasks while your script processes in the background.
+For scripts that take a long time to run, the best approach is to
+dedicate a separate PowerShell terminal to them. This keeps your main
+terminal and R console in Positron free for other work.
 
-To run any of the above commands as a background job, you can use the `Start-Job` cmdlet in PowerShell.
+1.  **Open a new PowerShell terminal** in Positron.
+2.  **Run your command script** in the new terminal.
 
-**Example:**
-
-```powershell
-Start-Job -ScriptBlock {
-    # First, load the functions within the job's scope
-    . .\commands\Invoke-Rscript.ps1
-
-    # Now, call the function
-    Invoke-RCode-Renv -Code @'
-    # This is a long-running script
-    Sys.sleep(30) # Simulate a 30-second task
-    print("Background job finished!")
-    '@
-}
+``` powershell
+# In your new terminal, from the project root:
+.\commands\long_running_task.ps1
 ```
 
-You can check the status of your background jobs with `Get-Job` and retrieve the output with `Receive-Job`.
-
-```powershell
-# See the status of all jobs
-Get-Job
-
-# Get the output of a specific job (e.g., with Id 1)
-Receive-Job -Id 1
-```
-
-This approach allows you to maintain an interactive R session in Positron while offloading heavy computations to the background, improving your workflow and productivity.
+The script will run to completion in that terminal, and you can continue
+your work elsewhere.

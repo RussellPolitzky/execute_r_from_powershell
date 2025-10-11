@@ -1,17 +1,32 @@
 function Find-Rscript {
     <#
     .SYNOPSIS
-        Finds Rscript.exe for a specified R version (64-bit only).
+        Finds the Rscript.exe executable for a specified R version.
     
     .DESCRIPTION
-        Searches for Rscript.exe in environment variables, registry, and common 
-        installation locations. Throws an error if not found.
+        This function locates the full path to Rscript.exe for a given R version.
+        It searches a series of locations in the following order:
+        1. Directories in the system's PATH environment variable.
+        2. The path specified in the R_HOME environment variable.
+        3. Windows Registry entries for R installations (both HKLM and HKCU).
+        4. Common installation directories (e.g., C:\Program Files\R).
+        5. A broader search across system drives.
+
+        The function is designed to find 64-bit versions of R and will throw an
+        error if a matching version cannot be found.
     
     .PARAMETER Version
-        The R version to find (e.g., "4.5.1")
+        The R version to find (e.g., "4.5.1"). This must be a specific version string.
     
     .EXAMPLE
         Find-Rscript -Version "4.5.1"
+        # Returns the full path to Rscript.exe for R version 4.5.1 if found.
+
+    .OUTPUTS
+        System.String. The full, absolute path to the Rscript.exe executable.
+
+    .NOTES
+        This function is intended to locate 64-bit R installations only.
     #>
     [CmdletBinding()]
     param(
@@ -42,8 +57,8 @@ function Find-Rscript {
     # 3. Check Windows Registry
     Write-Verbose "Checking Windows Registry..."
     $registryPaths = @(
-        "HKLM:\\SOFTWARE\\R-core\\R\$Version",
-        "HKCU:\\SOFTWARE\\R-core\\R\$Version"
+        "HKLM:\\SOFTWARE\R-core\R\$Version",
+        "HKCU:\\SOFTWARE\R-core\R\$Version"
     )
     
     foreach ($regPath in $registryPaths) {
@@ -118,22 +133,31 @@ function Find-Rscript {
 function Invoke-RCode {
     <#
     .SYNOPSIS
-        Executes R code using a specified R version.
+        Executes a block of R code using a specified R version.
     
     .DESCRIPTION
-        Finds Rscript.exe for the specified R version and executes the provided R code.
+        This function first uses Find-Rscript to locate the required R version,
+        then executes the provided R code. The code is written to a temporary .R
+        file to ensure proper execution and avoid command-line argument parsing
+        issues, especially with multi-line scripts. The output from the R script
+        is written to the host.
     
     .PARAMETER Code
-        The R code to execute.
+        A string containing the R code to be executed. This can be a single line
+        or a multi-line script block.
     
     .PARAMETER Version
-        The R version to use (e.g., "4.5.1")
+        The R version to use for executing the code (e.g., "4.5.1").
     
     .EXAMPLE
-        Invoke-RCode -Code "print('Hello from R')" -Version "4.5.1"
-    
+        Invoke-RCode -Version "4.5.1" -Code "print('Hello from R!')"
+
     .EXAMPLE
-        Invoke-RCode -Code "cat(R.version.string)" -Version "4.5.0"
+        $RCode = @'
+        data <- data.frame(x = 1:10, y = rnorm(10))
+        summary(data)
+        '@
+        Invoke-RCode -Version "4.5.0" -Code $RCode
     #>
     [CmdletBinding()]
     param(
@@ -183,14 +207,26 @@ function Invoke-RCode {
 function FindRVersionFromRenv {
     <#
     .SYNOPSIS
-        Finds the R version from a renv.lock file.
+        Finds the R version from a renv.lock file in the current directory.
     
     .DESCRIPTION
-        Searches for a renv.lock file in the parent directory, parses it, 
-        and returns the R version. Throws an error if the file is not found.
+        Searches for a renv.lock file in the current working directory. If found,
+        it parses the file as JSON to extract and return the R version string
+        specified under the "R.Version" key. Throws an error if the file is not
+        found or cannot be parsed.
     
     .EXAMPLE
-        FindRVersionFromRenv
+        # Assuming renv.lock is in the current directory:
+        $version = FindRVersionFromRenv
+        Write-Host "R Version from renv.lock: $version"
+
+    .OUTPUTS
+        System.String. The R version specified in the renv.lock file.
+
+    .NOTES
+        This function uses Get-Location to determine the search path, making it
+        compatible with being dot-sourced into a PowerShell session, where it
+        will use the caller's working directory.
     #>
     [CmdletBinding()]
     param()
@@ -214,16 +250,30 @@ function FindRVersionFromRenv {
 function Invoke-RCode-Renv {
     <#
     .SYNOPSIS
-        Executes R code using the R version specified in renv.lock.
+        Executes R code using the R version specified in the project's renv.lock file.
     
     .DESCRIPTION
-        Finds the R version from renv.lock and executes the provided R code.
+        This is a convenience function that automates R code execution in an renv
+        project. It calls FindRVersionFromRenv to get the R version from the
+        renv.lock file in the current directory, then passes that version and the
+        provided R code to the Invoke-RCode function for execution.
     
     .PARAMETER Code
-        The R code to execute.
+        A string containing the R code to be executed. This can be a single line
+        or a multi-line script block.
     
     .EXAMPLE
-        Invoke-RCode-Renv -Code "print('Hello from R')"
+        # Executes a simple command using the R version from renv.lock
+        Invoke-RCode-Renv -Code "print(R.version.string)"
+
+    .EXAMPLE
+        # Executes a multi-line script
+        $RCode = @'
+        # This code will run with the project's specified R version
+        data <- data.frame(x = 1:10, y = rnorm(10))
+        print(summary(data))
+        '@
+        Invoke-RCode-Renv -Code $RCode
     #>
     [CmdletBinding()]
     param(

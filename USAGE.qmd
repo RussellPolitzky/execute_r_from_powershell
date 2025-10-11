@@ -93,3 +93,9 @@ For scripts that take a long time to run, the best approach is to dedicate a sep
 ```
 
 The script will run to completion in that terminal, and you can continue your work elsewhere.
+
+::: {.callout-tip}
+You can also launch the same process from standard, PowerShell terminal outside of Positron.
+This can be useful for very long running processes that you'd like execute on their own.
+:::
+

@@ -181,11 +181,8 @@ function Invoke-RCode {
             $utf8NoBom = New-Object System.Text.UTF8Encoding $false
             [System.IO.File]::WriteAllText($tempRFile, $Code, $utf8NoBom)
             
-            # Execute the R script file and capture output
-            $output = & $rscriptPath --vanilla $tempRFile 2>&1
-            
-            # Display output
-            $output | ForEach-Object { Write-Host $_ }
+            # Execute the R script file and stream output directly to the console
+            & $rscriptPath --vanilla $tempRFile 2>&1 | ForEach-Object { Write-Host $_ }
             
             if ($LASTEXITCODE -ne 0) {
                 throw "R code execution failed with exit code $LASTEXITCODE"

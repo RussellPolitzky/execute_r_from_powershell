@@ -181,18 +181,71 @@ function Invoke-RCode {
             $utf8NoBom = New-Object System.Text.UTF8Encoding $false
             [System.IO.File]::WriteAllText($tempRFile, $Code, $utf8NoBom)
             
-            # Execute the R script file and stream output directly to the console
-            & $rscriptPath --vanilla $tempRFile 2>&1 | ForEach-Object { Write-Host $_ }
-            
-            if ($LASTEXITCODE -ne 0) {
-                throw "R code execution failed with exit code $LASTEXITCODE"
+            # Configure the process start info
+            $psi = New-Object System.Diagnostics.ProcessStartInfo
+            $psi.FileName = $rscriptPath
+            $psi.Arguments = "`"$tempRFile`"" # No --vanilla to allow .Rprofile (renv) to load
+            $psi.UseShellExecute = $false
+            $psi.RedirectStandardOutput = $true
+            $psi.RedirectStandardError = $true
+            $psi.RedirectStandardInput = $true
+            $psi.CreateNoWindow = $true
+            $psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+            $psi.StandardErrorEncoding = [System.Text.Encoding]::UTF8
+
+            # key fix: Disable renv auto snapshot prompts which can cause hangs
+            $psi.EnvironmentVariables["RENV_CONFIG_AUTO_SNAPSHOT"] = "FALSE"
+
+            $process = New-Object System.Diagnostics.Process
+            $process.StartInfo = $psi
+
+            # Event handlers for async output reading to prevent deadlocks
+            $outputHandler = {
+                param($sender, $e)
+                if ($e.Data -ne $null) {
+                    Write-Host $e.Data
+                }
+            }
+
+            $errorHandler = {
+                param($sender, $e)
+                if ($e.Data -ne $null) {
+                    Write-Host $e.Data -ForegroundColor Red
+                }
+            }
+
+            Register-ObjectEvent -InputObject $process -EventName OutputDataReceived -Action $outputHandler | Out-Null
+            Register-ObjectEvent -InputObject $process -EventName ErrorDataReceived -Action $errorHandler | Out-Null
+
+            $process.Start() | Out-Null
+
+            # CRITICAL: Close StandardInput immediately.
+            # If renv/R tries to prompt (e.g. "Restart R?"), it will hit EOF and likely proceed or fail gracefully
+            # rather than hanging indefinitely waiting for input.
+            $process.StandardInput.Close()
+
+            $process.BeginOutputReadLine()
+            $process.BeginErrorReadLine()
+
+            $process.WaitForExit()
+
+            if ($process.ExitCode -ne 0) {
+                throw "R code execution failed with exit code $($process.ExitCode)"
             }
         }
         finally {
-            # Clean up temp file
-            if (Test-Path $tempRFile) {
-                Remove-Item $tempRFile -ErrorAction SilentlyContinue
-            }
+             # Unregister events if they exist
+             Get-EventSubscriber -SourceIdentifier "*OutputDataReceived" -ErrorAction SilentlyContinue | Unregister-Event
+             Get-EventSubscriber -SourceIdentifier "*ErrorDataReceived" -ErrorAction SilentlyContinue | Unregister-Event
+
+             if ($process) {
+                $process.Dispose()
+             }
+
+             # Clean up temp file
+             if (Test-Path $tempRFile) {
+                 Remove-Item $tempRFile -ErrorAction SilentlyContinue
+             }
         }
         
     } catch {

@@ -25,3 +25,12 @@ Invoke-RCode-Renv -Code @'
 print("Hello from R, using the version specified in renv.lock!")
 print(R.version.string)
 '@
+
+# 5. Confirm that there R code is running within Renv session.
+Invoke-RCode-Renv -Code @'
+if (!is.null(renv::project())) {
+  message("renv is active. Project root: ", renv::project())
+} else {
+  message("renv is NOT active.")
+}
+'@

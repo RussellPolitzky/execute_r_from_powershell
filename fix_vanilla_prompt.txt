@@ -1,0 +1,20 @@
+
+
+Please inspect this project, taking special note of the 
+powershell scripts in the commands folder.
+
+Note that when an R script is invoked, the current powershell 
+scrips invoke RScript.exe using the --vanilla option.
+This is a problem because I want these scripts to work with 
+renv and as such, they must use the local .Rprofile file.
+When the --vanilla is used, this causes RScript to not use
+the local renv .Rprofile file.  This means that when 
+a script is executed for a renv project, it does not use 
+the local environment because the contents of the 
+local .Rprofile file are not executed.
+
+When --vanilla is removed, then the powershell script just
+hangs for some reason.
+
+Please resolve this problem so that the powershell script
+works with renv.

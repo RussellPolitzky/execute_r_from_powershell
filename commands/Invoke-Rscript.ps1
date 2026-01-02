@@ -181,67 +181,39 @@ function Invoke-RCode {
             $utf8NoBom = New-Object System.Text.UTF8Encoding $false
             [System.IO.File]::WriteAllText($tempRFile, $Code, $utf8NoBom)
             
-            # Configure the process start info
-            $psi = New-Object System.Diagnostics.ProcessStartInfo
-            $psi.FileName = $rscriptPath
-            $psi.Arguments = "`"$tempRFile`"" # No --vanilla to allow .Rprofile (renv) to load
-            $psi.UseShellExecute = $false
-            $psi.RedirectStandardOutput = $true
-            $psi.RedirectStandardError = $true
-            $psi.RedirectStandardInput = $true
-            $psi.CreateNoWindow = $true
-            $psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
-            $psi.StandardErrorEncoding = [System.Text.Encoding]::UTF8
+            # Create an empty file to use as Stdin (effectively closing it)
+            $nullInput = [System.IO.Path]::GetTempFileName()
 
-            # key fix: Disable renv auto snapshot prompts which can cause hangs
-            $psi.EnvironmentVariables["RENV_CONFIG_AUTO_SNAPSHOT"] = "FALSE"
+            try {
+                # Environment setup: Disable renv auto snapshot prompts
+                # We save the old value to restore it later
+                $oldRenvSnapshot = $env:RENV_CONFIG_AUTO_SNAPSHOT
+                $env:RENV_CONFIG_AUTO_SNAPSHOT = "FALSE"
 
-            $process = New-Object System.Diagnostics.Process
-            $process.StartInfo = $psi
+                # Use Start-Process with -NoNewWindow to stream execution directly to the console.
+                # -RedirectStandardInput points to an empty file, effectively sending EOF immediately
+                # so prompts don't hang.
+                $process = Start-Process -FilePath $rscriptPath -ArgumentList "`"$tempRFile`"" -NoNewWindow -RedirectStandardInput $nullInput -PassThru -Wait
 
-            # Event handlers for async output reading to prevent deadlocks
-            $outputHandler = {
-                param($sender, $e)
-                if ($e.Data -ne $null) {
-                    Write-Host $e.Data
+                if ($process.ExitCode -ne 0) {
+                    throw "R code execution failed with exit code $($process.ExitCode)"
                 }
             }
-
-            $errorHandler = {
-                param($sender, $e)
-                if ($e.Data -ne $null) {
-                    Write-Host $e.Data -ForegroundColor Red
+            finally {
+                # Restore environment variable
+                if ($oldRenvSnapshot -ne $null) {
+                     $env:RENV_CONFIG_AUTO_SNAPSHOT = $oldRenvSnapshot
+                } else {
+                     Remove-Item Env:\RENV_CONFIG_AUTO_SNAPSHOT -ErrorAction SilentlyContinue
                 }
-            }
 
-            Register-ObjectEvent -InputObject $process -EventName OutputDataReceived -Action $outputHandler | Out-Null
-            Register-ObjectEvent -InputObject $process -EventName ErrorDataReceived -Action $errorHandler | Out-Null
-
-            $process.Start() | Out-Null
-
-            # CRITICAL: Close StandardInput immediately.
-            # If renv/R tries to prompt (e.g. "Restart R?"), it will hit EOF and likely proceed or fail gracefully
-            # rather than hanging indefinitely waiting for input.
-            $process.StandardInput.Close()
-
-            $process.BeginOutputReadLine()
-            $process.BeginErrorReadLine()
-
-            $process.WaitForExit()
-
-            if ($process.ExitCode -ne 0) {
-                throw "R code execution failed with exit code $($process.ExitCode)"
+                # Clean up null input file
+                if (Test-Path $nullInput) {
+                    Remove-Item $nullInput -ErrorAction SilentlyContinue
+                }
             }
         }
         finally {
-             # Unregister events if they exist
-             Get-EventSubscriber -SourceIdentifier "*OutputDataReceived" -ErrorAction SilentlyContinue | Unregister-Event
-             Get-EventSubscriber -SourceIdentifier "*ErrorDataReceived" -ErrorAction SilentlyContinue | Unregister-Event
-
-             if ($process) {
-                $process.Dispose()
-             }
-
              # Clean up temp file
              if (Test-Path $tempRFile) {
                  Remove-Item $tempRFile -ErrorAction SilentlyContinue

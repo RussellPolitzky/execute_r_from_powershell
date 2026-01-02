@@ -34,3 +34,7 @@ if (!is.null(renv::project())) {
   message("renv is NOT active.")
 }
 '@
+
+Invoke-RCode-Renv -Code @'
+targets::tar_make()
+'@

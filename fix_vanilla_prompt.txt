@@ -18,3 +18,14 @@ hangs for some reason.
 
 Please resolve this problem so that the powershell script
 works with renv.
+
+Ensure realtime streaming from the R process is working
+-------------------------------------------------------
+
+Please examine this project carefully.  Also pay particular attention 
+to the run_background.ps1 script.  This script executes the targets project in 
+this folder.  Note that this project runs in a renv environment.  
+The run_background.ps1 works but currently it only shows me the console 
+output from R, upon completion.  I need it to stream R’s console output in 
+real time so that I can see the targets output as it happens. Please update 
+Invoke-Rscripts.ps1 to allow this to happen.
